@@ -54,6 +54,9 @@ std_msgs__msg__Float32 right_rpm_msg;
 
 IMUService* imu_ptr = nullptr;
 
+MPU9250_HAL imu_hal(i2c_default, MPU6500_DEFAULT_ADDRESS);
+IMUService  imu_service(imu_hal);
+
 // Encoder objects
 
 EncoderHAL enc_FL(ENCODER1_PIN_A, ENCODER1_PIN_B);   // front-left
@@ -213,23 +216,16 @@ int main() {
     );
 
 
-    // Initialize the IMU
-    MPU9250_HAL imu_hal(i2c_default, MPU6500_DEFAULT_ADDRESS);
-    IMUService imu_service(imu_hal);
+    // Initialize IMU
+    while (!imu_service.IMUInit(PICO_DEFAULT_I2C_SDA_PIN,
+                          PICO_DEFAULT_I2C_SCL_PIN,
+                          400000))
+    {
+        printf("IMU SERVICE retry...\n");
+        sleep_ms(500);
+    }
+
     imu_ptr = &imu_service;
-
-    // Initialize IMU HAL (low-level sensor) - retry until successful
-    while (!imu_hal.begin(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, 400000))
-    {
-        printf("IMU HAL begin failed, retrying...\n");
-        sleep_ms(500);
-    }
-
-    while (!imu_service.begin())
-    {
-        printf("IMU Service begin failed, retrying...\n");
-        sleep_ms(500);
-    }
 
 
     // Initialize encoders and start periodic calculation (100 ms timer inside service)
