@@ -15,6 +15,7 @@
 #include "sensor_msgs/msg/imu.h"
 #include <std_msgs/msg/float32.h>
 
+
 #include "MPU9250_Service.hpp"
 
 #include "motor_config.hpp"
@@ -80,8 +81,8 @@ MotorService svc_motor_FR(motor_FR);
 MotorService svc_motor_RR(motor_RR);
 
 
-// Kinematics parameters (based on robot) <--------
-const float WHEEL_BASE_M  = 0.25f;    // Assume distance between wheels in meters (25 cm = 0.25 m)
+// Kinematics parameters (based on robot) 
+const float WHEEL_BASE_M  = 0.28f;    // Assume distance between wheels in meters (25 cm = 0.25 m)
 const float MAX_SPEED_M_S = 1.0f;     // Maximum allowed speed in m/s
 
 // cmd_vel callback: converts Twist to target speed for each motor
@@ -124,17 +125,17 @@ void control_timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     else{}
 
     // Read current values from encoder services
-    float speed_FL      = svc_enc_FL.encoder_getSpeedCmS();
-    float speed_RL      = svc_enc_RL.encoder_getSpeedCmS();
+    float speed_FL      = svc_enc_FL.encoderGetSpeedCmS();
+    float speed_RL      = svc_enc_RL.encoderGetSpeedCmS();
 
-    float speed_FR      = svc_enc_FR.encoder_getSpeedCmS();
-    float speed_RR      = svc_enc_RR.encoder_getSpeedCmS();
+    float speed_FR      = svc_enc_FR.encoderGetSpeedCmS();
+    float speed_RR      = svc_enc_RR.encoderGetSpeedCmS();
 
-    float rpm_FL        = svc_enc_FL.encoder_getRPM();
-    float rpm_RL        = svc_enc_RL.encoder_getRPM();
+    float rpm_FL        = svc_enc_FL.encoderGetRPM();
+    float rpm_RL        = svc_enc_RL.encoderGetRPM();
 
-    float rpm_FR        = svc_enc_FR.encoder_getRPM();
-    float rpm_RR        = svc_enc_RR.encoder_getRPM();
+    float rpm_FR        = svc_enc_FR.encoderGetRPM();
+    float rpm_RR        = svc_enc_RR.encoderGetRPM();
     
 
     // Fill messages
@@ -171,18 +172,6 @@ void control_timer_callback(rcl_timer_t * timer, int64_t last_call_time)
         printf("Failed to publish right RPM.\n");
     }
 
-    // print every 1 second for debugging
-    /*
-    static uint32_t counter = 0;
-    counter++;
-    if (counter % 10 == 0)  
-    {
-        printf("[%.1fs] L: %.2f cm/s  %.1f RPM   ---  R: %.2f cm/s  %.1f RPM\n",
-               (float)last_call_time / 1e9f,  // Convert nanosec to sec
-               speed_FL, rpm_FL,
-               speed_FR, rpm_FR);
-    }
-    else{}*/
 }
 
 void imu_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
@@ -242,25 +231,25 @@ int main() {
         sleep_ms(500);
     }
 
-    // Initialize motors 
-    motor_FL.motorInit();
-    motor_RL.motorInit();  
-
-    motor_FR.motorInit();
-    motor_RR.motorInit();  
 
     // Initialize encoders and start periodic calculation (100 ms timer inside service)
-    enc_FL.encoder_init();
-    enc_RL.encoder_init();
+    svc_enc_FL.encoderInit();
+    svc_enc_RL.encoderInit();
 
-    enc_FR.encoder_init();
-    enc_RR.encoder_init();
+    svc_enc_FR.encoderInit();
+    svc_enc_RR.encoderInit();
 
-    svc_enc_FL.encoder_start();
-    svc_enc_RL.encoder_start();
+    svc_enc_FL.encoderStart();
+    svc_enc_RL.encoderStart();
 
-    svc_enc_FR.encoder_start();
-    svc_enc_RR.encoder_start();
+    svc_enc_FR.encoderStart();
+    svc_enc_RR.encoderStart();
+
+    // Initialize motors 
+    svc_motor_FL.motorInit();
+    svc_motor_RL.motorInit();
+    svc_motor_FR.motorInit();
+    svc_motor_RR.motorInit();
 
     // micro-ROS core setup
     rcl_allocator_t allocator = rcl_get_default_allocator();

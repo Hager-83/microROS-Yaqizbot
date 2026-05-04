@@ -1,5 +1,6 @@
 #include "encoder_hal.hpp"
 
+
 /***************************************************************
  * Static Members Initialization
  ***************************************************************/
@@ -22,7 +23,7 @@ EncoderHAL::EncoderHAL(uint pinA, uint pinB)
 /***************************************************************
  * Method: encoder_init
  ***************************************************************/
-void EncoderHAL::encoder_init() {
+void EncoderHAL::encoderInit() {
     gpio_init(_pinA);
     gpio_init(_pinB);
 
@@ -40,7 +41,7 @@ void EncoderHAL::encoder_init() {
         _pinA,
         GPIO_IRQ_EDGE_RISE,
         true,
-        &EncoderHAL::encoder_gpioCallback
+        &EncoderHAL::encoderGpioCallback
     );
 
     gpio_set_irq_enabled(
@@ -53,7 +54,7 @@ void EncoderHAL::encoder_init() {
 /***************************************************************
  * Static ISR Callback
  ****************************************************************/
-void EncoderHAL::encoder_gpioCallback(uint gpio, uint32_t events) {
+void EncoderHAL::encoderGpioCallback(uint gpio, uint32_t events) {
     // Dispatch interrupt to the correct encoder instance
     for (int i = 0; i < instanceCount; i++) {
         if (gpio == instances[i]->_pinA || gpio == instances[i]->_pinB) {
@@ -87,15 +88,16 @@ void EncoderHAL::handleEncoder() {
 /***************************************************************
  * Getter Methods
  ***************************************************************/
-int32_t EncoderHAL::encoder_getTicks() const { 
+int32_t EncoderHAL::encoderGetTicks() const { 
     return _ticks;
 }
 
-void EncoderHAL::encoder_clear() {
+void EncoderHAL::encoderClear() {
     _ticks = 0;
     _direction = EncoderDirection::UNKNOWN;
 }
 
-EncoderDirection EncoderHAL::encoder_getDirection() const {
+EncoderDirection EncoderHAL::encoderGetDirection() const {
     return _direction;
 }
+

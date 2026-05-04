@@ -37,28 +37,28 @@ public:
      * Description:
      *     - Initializes GPIO pins and enables interrupts.
      ***********************************************************/
-    void encoder_init();
+    void encoderInit();
 
     /***********************************************************
      * Method: encoder_getTicks
      * Description:
      *     - Returns current encoder tick count.
      ***********************************************************/
-    int32_t encoder_getTicks() const;
+    int32_t encoderGetTicks() const;
 
     /***********************************************************
      * Method: encoder_clear
      * Description:
      *     - Resets tick counter and direction.
      ***********************************************************/
-    void encoder_clear();
+    void encoderClear();
 
     /***********************************************************
      * Method: encoder_getDirection
      * Description:
      *     - Returns last detected rotation direction.
      ***********************************************************/
-    EncoderDirection encoder_getDirection() const;
+    EncoderDirection encoderGetDirection() const;
 
 private:
     /***********************************************************
@@ -67,7 +67,7 @@ private:
      *     - Called on GPIO interrupt.
      *     - Dispatches interrupt to the correct encoder instance.
      ***********************************************************/
-    static void encoder_gpioCallback(uint gpio, uint32_t events);
+    static void encoderGpioCallback(uint gpio, uint32_t events);
 
     /***********************************************************
      * Method: handleEncoder

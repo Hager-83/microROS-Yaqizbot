@@ -26,45 +26,47 @@ public:
      ***********************************************************/
     EncoderService(EncoderHAL& encoder);
 
+    void encoderInit();
+
     /***********************************************************
-     * Method: encoder_start
+     * Method: encoderStart
      * Description:
      *     - Starts a periodic repeating timer (every 100ms) that updates
      *       the RPM, speed, distance, and rotations values.
      ***********************************************************/
-    void encoder_start();
+    void encoderStart();
 
     /***********************************************************
-     * Method: encoder_getRPM
+     * Method: encoderGetRPM
      * Description:
      *     - Returns the most recent computed RPM value.
      *     - Const method; does not modify internal state.
      ***********************************************************/
-    float encoder_getRPM() const;
+    float encoderGetRPM() const;
 
     /***********************************************************
-     * Method: encoder_getSpeedCmS
+     * Method: encoderGetSpeedCmS
      * Description:
      *     - Returns the most recent computed linear speed in cm/s.
      *     - Const method; does not modify internal state.
      ***********************************************************/
-    float encoder_getSpeedCmS() const;
+    float encoderGetSpeedCmS() const;
 
     /***********************************************************
-     * Method: encoder_getDistanceCm
+     * Method: encoderGetDistanceCm
      * Description:
      *     - Returns the accumulated distance in cm since start or reset.
      *     - Const method; does not modify internal state.
      ***********************************************************/
-    float encoder_getDistanceCm() const;
+    float encoderGetDistanceCm() const;
 
     /***********************************************************
-     * Method: encoder_getRotations
+     * Method: encoderGetRotations
      * Description:
      *     - Returns the total number of rotations completed since start.
      *     - Const method; does not modify internal state.
      ***********************************************************/
-    float encoder_getRotations() const;
+    float encoderGetRotations() const;
 
 private:
     /***********************************************************

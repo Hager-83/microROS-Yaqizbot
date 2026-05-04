@@ -35,6 +35,6 @@
 #define ENCODER_CPR 374
 
 // Radius of the wheel in centimeters
-#define WHEEL_RADIUS_CM 3.5f
+#define WHEEL_RADIUS_CM 4.25f
 
 #endif // ENCODER_CONFIG_HPP

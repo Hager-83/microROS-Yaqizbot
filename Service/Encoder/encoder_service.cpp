@@ -21,8 +21,23 @@ EncoderService::EncoderService(EncoderHAL& encoder)
       _lastTicks(0), _currentTicks(0),
       _rpm(0), _speedCmS(0), _distanceCm(0){}
 
+
+
+/***************************************************************
+ * Method: encoderInit
+ * Description:
+ *     - Initializes the underlying HAL encoder.
+ *     - This abstracts the HAL layer from the Application layer.
+ *     - Application should ONLY call this function instead of
+ *       directly calling HAL functions.
+ ***************************************************************/
+void EncoderService::encoderInit()
+{
+    _encoder.encoderInit();
+}
+
 // ---------------------------
-// Method: encoder_start
+// Method: encoderStart
 // ---------------------------
 // Description:
 //     - Starts a repeating timer with 100ms period.
@@ -30,7 +45,7 @@ EncoderService::EncoderService(EncoderHAL& encoder)
 //       in turn updates RPM, speed, distance, and rotations.
 // Notes:
 //     - Uses pico-sdk's add_repeating_timer_ms API for scheduling periodic updates.
-void EncoderService::encoder_start() {
+void EncoderService::encoderStart() {
     add_repeating_timer_ms(100, EncoderService::timerCallback, this, &_timer);
 }
 
@@ -59,7 +74,7 @@ bool EncoderService::timerCallback(struct repeating_timer* t) {
 //         3. Linear speed (cm/s) based on distance traveled over 100ms
 //     - Updates lastTicks for next iteration.
 void EncoderService::update() {
-    _currentTicks = _encoder.encoder_getTicks();
+    _currentTicks = _encoder.encoderGetTicks();   
     int32_t delta = _currentTicks - _lastTicks;
 
     // RPM calculation: delta ticks over 0.1s interval -> RPM
@@ -80,9 +95,9 @@ void EncoderService::update() {
 // These methods provide read-only access to computed values.
 // Marked const to indicate they do not modify object state.
 
-float EncoderService::encoder_getRPM() const { return _rpm; }
-float EncoderService::encoder_getSpeedCmS() const { return _speedCmS; }
-float EncoderService::encoder_getDistanceCm() const { return _distanceCm; }
+float EncoderService::encoderGetRPM() const { return _rpm; }
+float EncoderService::encoderGetSpeedCmS() const { return _speedCmS; }
+float EncoderService::encoderGetDistanceCm() const { return _distanceCm; }
 
 // Returns total number of rotations calculated from ticks
-float EncoderService::encoder_getRotations() const { return _currentTicks / static_cast<float>(ENCODER_CPR); }
+float EncoderService::encoderGetRotations() const { return _currentTicks / static_cast<float>(ENCODER_CPR); }

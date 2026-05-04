@@ -107,7 +107,7 @@ public:
      * 
      * @param hal :Reference to the MPU9250_HAL instance.
     **/
-    bool begin();
+    bool IMUInit(uint sda_pin, uint scl_pin, uint32_t baudrate_hz);
 
     /**
      * @brief :Get processed accelerometer data.
@@ -143,8 +143,9 @@ public:
      * Reads raw mag data from AK8963 via HAL, applies scaling, and returns in µT.
      * 
      * @return :MagData structure with scaled values.
-     */
+     *
     MagData   getMagnetometer();
+    */
 
     /**
      * @brief :Get all processed IMU data at once.

@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 
+
 /* micro-ROS */
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
@@ -32,21 +33,23 @@ sensor_msgs__msg__Imu imu_msg;
 rcl_timer_t imu_timer;
 rcl_timer_t control_timer;
 
-
 IMUService* imu_ptr = nullptr;
+
+
+MPU9250_HAL imu_hal(i2c_default, MPU6500_DEFAULT_ADDRESS);
+IMUService  imu_service(imu_hal);
 
 void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
     IMUData data = imu_ptr->getAll();
     
+    imu_msg.linear_acceleration.x = data.accel.x_g * 9.81f;
+    imu_msg.linear_acceleration.y = data.accel.y_g * 9.81f;
+    imu_msg.linear_acceleration.z = data.accel.z_g * 9.81f;
 
-    imu_msg.linear_acceleration.x = data.accel.x_g;
-    imu_msg.linear_acceleration.y = data.accel.y_g;
-    imu_msg.linear_acceleration.z = data.accel.z_g;
-
-    imu_msg.angular_velocity.x = data.gyro.x_dps;
-    imu_msg.angular_velocity.y = data.gyro.y_dps;
-    imu_msg.angular_velocity.z = data.gyro.z_dps;
+    imu_msg.angular_velocity.x = data.gyro.x_dps * (3.14159f / 180.0f);
+    imu_msg.angular_velocity.y = data.gyro.y_dps * (3.14159f / 180.0f);
+    imu_msg.angular_velocity.z = data.gyro.z_dps * (3.14159f / 180.0f);
 
     rcl_ret_t ret = rcl_publish(&imu_pub, &imu_msg, NULL);
     if (ret != RCL_RET_OK) 
@@ -55,7 +58,6 @@ void timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     }
 
 }
-    
 
 int main()
 {
@@ -73,25 +75,22 @@ int main()
     pico_serial_transport_read
     );
 
-    // Initialize the IMU
-    MPU9250_HAL imu_hal(i2c_default, MPU6500_DEFAULT_ADDRESS);
-    IMUService imu_service(imu_hal);
-    imu_ptr = &imu_service;
 
     // Initialize IMU HAL (low-level sensor) - retry until successful
-    while (!imu_hal.begin(PICO_DEFAULT_I2C_SDA_PIN, PICO_DEFAULT_I2C_SCL_PIN, 400000))
+
+
+    while (!imu_service.IMUInit(PICO_DEFAULT_I2C_SDA_PIN,
+                          PICO_DEFAULT_I2C_SCL_PIN,
+                          400000))
     {
-        printf("IMU HAL begin failed, retrying...\n");
+        printf("IMU SERVICE retry...\n");
         sleep_ms(500);
     }
 
-    while (!imu_service.begin())
-    {
-        printf("IMU Service begin failed, retrying...\n");
-        sleep_ms(500);
-    }
+    imu_ptr = &imu_service;
 
     printf("IMU Initialized successfully\n");
+
 
     // -------------------- micro-ROS variables --------------------
     rcl_timer_t timer;
