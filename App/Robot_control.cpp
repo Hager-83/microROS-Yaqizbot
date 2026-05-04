@@ -54,7 +54,6 @@ std_msgs__msg__Float32 right_speed_msg;
 std_msgs__msg__Float32 left_rpm_msg;
 std_msgs__msg__Float32 right_rpm_msg;
 
-
 IMUService* imu_ptr = nullptr;
 
 MPU9250_HAL imu_hal(i2c_default, MPU6500_DEFAULT_ADDRESS);
@@ -270,7 +269,7 @@ void RobotSystem::init_ros()
     }
 
     rclc_support_init(&support, 0, NULL, &allocator);
-    rclc_node_init_default(&node, "motors_node", "", &support);
+    rclc_node_init_default(&node, "robot_control_node", "", &support);
 
     // Subscriber
     rclc_subscription_init_default(
@@ -301,7 +300,7 @@ void RobotSystem::init_ros()
         RCL_MS_TO_NS(150), control_timer_callback);
 
     rclc_timer_init_default(&imu_timer, &support,
-        RCL_MS_TO_NS(20), imu_timer_callback);
+        RCL_MS_TO_NS(100), imu_timer_callback);
 
     // Executor
     rclc_executor_init(&executor, &support.context, 3, &allocator);
