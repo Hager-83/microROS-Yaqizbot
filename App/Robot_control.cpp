@@ -115,8 +115,9 @@ void cmd_vel_callback(const void *msgin) {
     svc_motor_FL.setTargetSpeed(left_target);
     svc_motor_RL.setTargetSpeed(left_target);
 
-    svc_motor_FR.setTargetSpeed(right_target);
-    svc_motor_RR.setTargetSpeed(right_target);
+    // right side motor are physically reversed 
+    svc_motor_FR.setTargetSpeed(-right_target); //<----------------
+    svc_motor_RR.setTargetSpeed(-right_target);
     
 
     // Debug print
@@ -146,8 +147,13 @@ void control_timer_callback(rcl_timer_t * timer, int64_t last_call_time)
     js_velocities[3] = (svc_enc_RR.encoderGetSpeedCmS() / 100.0f) / WHEEL_RADIUS_M;
 
     // Timestamp
-    joint_state_msg.header.stamp.sec = 0;
-    joint_state_msg.header.stamp.nanosec = 0;
+    // In init_ros(), after rmw_uros_ping_agent succeeds:
+    rmw_uros_sync_session(1000);
+
+    // Then in each callback:
+    int64_t now_ms = rmw_uros_epoch_millis();
+    joint_state_msg.header.stamp.sec     = (int32_t)(now_ms / 1000);
+    joint_state_msg.header.stamp.nanosec = (uint32_t)((now_ms % 1000) * 1000000ULL);
 
     joint_state_msg.position.data  = js_positions;
     joint_state_msg.velocity.data  = js_velocities;
@@ -175,8 +181,9 @@ void imu_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     imu_msg.angular_velocity.z = data.gyro.z_dps * (M_PI / 180.0f);
 
     // Timestamp
-    imu_msg.header.stamp.sec = 0;
-    imu_msg.header.stamp.nanosec = 0;
+    int64_t now_ms = rmw_uros_epoch_millis();
+    imu_msg.header.stamp.sec     = (int32_t)(now_ms / 1000);
+    imu_msg.header.stamp.nanosec = (uint32_t)((now_ms % 1000) * 1000000ULL);
 
 
     rcl_ret_t ret = rcl_publish(&imu_pub, &imu_msg, NULL);
@@ -265,6 +272,10 @@ void RobotSystem::init_ros()
     rclc_publisher_init_default(&joint_state_pub, &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState), "joint_states");
 
+    // Add this in init_ros(), alongside joint_state_pub init:
+    rclc_publisher_init_default(&imu_pub, &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data");
+
     sensor_msgs__msg__JointState__init(&joint_state_msg);
 
     joint_state_msg.header.frame_id.data     = (char*)"base_link";
@@ -317,6 +328,8 @@ void RobotSystem::spin()
 {
     while (true)
     {
-        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(150));
+        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
     }
 }
+
+
