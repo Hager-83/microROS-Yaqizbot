@@ -19,25 +19,25 @@
  *   Channel B → Motor RR (rear-right)
  * ================================================================ */
 
-/* ── L298N #1 Channel A → Motor FL ──────────────────────────── */
-#define MOTOR_RL_IN1    6
-#define MOTOR_RL_IN2    7
-#define MOTOR_RL_EN     8     // PWM
-
-/* ── L298N #1 Channel B → Motor RL ──────────────────────────── */
+/* ── L298N #1 Channel B → Motor FL ──────────────────────────── */
 #define MOTOR_FL_IN1    9
 #define MOTOR_FL_IN2    10
 #define MOTOR_FL_EN     11    // PWM
 
-/* ── L298N #2 Channel A → Motor FR ──────────────────────────── */
-#define MOTOR_RR_IN1    12
-#define MOTOR_RR_IN2    13
-#define MOTOR_RR_EN     14    // PWM
+/* ── L298N #1 Channel A → Motor RL ──────────────────────────── */
+#define MOTOR_RL_IN1    6
+#define MOTOR_RL_IN2    7
+#define MOTOR_RL_EN     8     // PWM
 
-/* ── L298N #2 Channel B → Motor RR ──────────────────────────── */
+/* ── L298N #2 Channel B → Motor FR ──────────────────────────── */
 #define MOTOR_FR_IN1    15
 #define MOTOR_FR_IN2    16
 #define MOTOR_FR_EN     17    // PWM
+
+/* ── L298N #2 Channel A → Motor RR ──────────────────────────── */
+#define MOTOR_RR_IN1    12
+#define MOTOR_RR_IN2    13
+#define MOTOR_RR_EN     14    // PWM
 
 /* ── PWM resolution ──────────────────────────────────────────── */
 #define PWM_WRAP  1000

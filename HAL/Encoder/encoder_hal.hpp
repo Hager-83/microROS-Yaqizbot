@@ -80,7 +80,7 @@ private:
     uint _pinA, _pinB;                      // Encoder GPIO pins
     volatile int32_t _ticks;                // Tick counter
     volatile EncoderDirection _direction;   // Rotation direction
-    volatile bool _lastState;           // Previous pin states
+    volatile bool _lastState;                // Previous pin states <----------------
 
     // -------- Static instance registry --------
     static EncoderHAL* instances[4];        // List of encoder instances

@@ -30,7 +30,6 @@ extern "C" {
 #include "motor_service.hpp"  
 
 
-
 // micro-ROS objects 
 rcl_subscription_t cmd_vel_sub;
 geometry_msgs__msg__Twist cmd_vel_msg;
@@ -148,7 +147,6 @@ void control_timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 
     // Timestamp
     // In init_ros(), after rmw_uros_ping_agent succeeds:
-    rmw_uros_sync_session(1000);
 
     // Then in each callback:
     int64_t now_ms = rmw_uros_epoch_millis();
@@ -304,7 +302,9 @@ void RobotSystem::init_ros()
     joint_state_msg.effort.data     = js_effort;
     joint_state_msg.effort.size     = 4;
     joint_state_msg.effort.capacity = 4;
+    
 
+    rmw_uros_sync_session(1000);
 
     // Timers
     rclc_timer_init_default2(&control_timer, &support,
