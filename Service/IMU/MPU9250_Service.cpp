@@ -18,9 +18,35 @@ bool IMUService::IMUInit(uint sda_pin, uint scl_pin, uint32_t baudrate_hz)
     if (!hal_.init(sda_pin, scl_pin, baudrate_hz))
     {
         return false;
-    }
+    }orientation
     
     return true;
+}
+
+void IMUService::calibrateGyro(uint16_t samples)
+{
+    int32_t sumX = 0;
+    int32_t sumY = 0;
+    int32_t sumZ = 0;
+
+    int16_t gx, gy, gz;
+
+    for(uint16_t i = 0; i < samples; i++)
+    {
+        if(hal_.readGyroRaw(gx, gy, gz))
+        {
+            sumX += gx;
+            sumY += gy;
+            sumZ += gz;
+        }
+
+        sleep_ms(5);
+    }
+
+    gyroBiasX_ = (sumX / (float)samples) * gyroScale_;
+    gyroBiasY_ = (sumY / (float)samples) * gyroScale_;
+    gyroBiasZ_ = (sumZ / (float)samples) * gyroScale_;
+
 }
 
 AccelData IMUService::getAccelerometer() 
@@ -51,9 +77,9 @@ GyroData IMUService::getGyroscope()
 
     return 
     {
-        gx * gyroScale_,
-        gy * gyroScale_,
-        gz * gyroScale_
+        (gx * gyroScale_) - gyroBiasX_,
+        (gy * gyroScale_) - gyroBiasY_,
+        (gz * gyroScale_) - gyroBiasZ_
     };
 }
 
@@ -109,9 +135,9 @@ IMUData IMUService::getAll()
 
     data.gyro = 
     {
-        gx * gyroScale_,
-        gy * gyroScale_,
-        gz * gyroScale_
+        (gx * gyroScale_) - gyroBiasX_,
+        (gy * gyroScale_) - gyroBiasY_,
+        (gz * gyroScale_) - gyroBiasZ_
     };
 
     data.temp = 
@@ -128,3 +154,4 @@ IMUData IMUService::getAll()
 
     return data;
 }
+

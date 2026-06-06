@@ -109,6 +109,9 @@ public:
     **/
     bool IMUInit(uint sda_pin, uint scl_pin, uint32_t baudrate_hz);
 
+
+    void calibrateGyro(uint16_t samples = 500);
+
     /**
      * @brief :Get processed accelerometer data.
      * 
@@ -156,6 +159,8 @@ public:
      */
     IMUData   getAll();
 
+    
+
 private:
     MPU9250_HAL &hal_;
 
@@ -163,6 +168,13 @@ private:
     const float gyroScale_;  // LSB -> deg/s
     const float magScale_;   // LSB -> µTesla (scaling from AK8963)
     const float tempScale_;
+
+    private:
+
+    float gyroBiasX_ = 0.0f;
+    float gyroBiasY_ = 0.0f;
+    float gyroBiasZ_ = 0.0f;
+
 };
 
 #endif // IMU_SERVICE_HPP

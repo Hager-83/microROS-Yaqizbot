@@ -178,6 +178,15 @@ void imu_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
     imu_msg.angular_velocity.y = data.gyro.y_dps * (M_PI / 180.0f);
     imu_msg.angular_velocity.z = data.gyro.z_dps * (M_PI / 180.0f);
 
+    imu_msg.header.frame_id.data =
+    (char*)"imu_link";
+    
+    imu_msg.header.frame_id.size =
+    strlen("imu_link");
+    
+    imu_msg.header.frame_id.capacity =
+    strlen("imu_link") + 1;
+
     // Timestamp
     int64_t now_ms = rmw_uros_epoch_millis();
     imu_msg.header.stamp.sec     = (int32_t)(now_ms / 1000);
@@ -225,6 +234,8 @@ void RobotSystem::init_hardware()
     }
 
     imu_ptr = &imu_service;
+
+    imu_service.calibrateGyro();
 
     // Encoders  
     svc_enc_FL.encoderInit();

@@ -237,3 +237,5 @@ bool MPU9250_HAL::readBytes(uint8_t reg, uint8_t* buffer, size_t len)
 
     return (r == (int)len);
 }
+
+
