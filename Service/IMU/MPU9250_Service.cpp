@@ -18,7 +18,7 @@ bool IMUService::IMUInit(uint sda_pin, uint scl_pin, uint32_t baudrate_hz)
     if (!hal_.init(sda_pin, scl_pin, baudrate_hz))
     {
         return false;
-    }orientation
+    }
     
     return true;
 }
