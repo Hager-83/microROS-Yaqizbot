@@ -1,28 +1,23 @@
 #include "encoder_hal.hpp"
 
-/***************************************************************
- * Static Members Initialization
- ***************************************************************/
-EncoderHAL* EncoderHAL::instances[2] = {nullptr, nullptr};
+// ---------------- static ----------------
+EncoderHAL* EncoderHAL::instances[4] = {nullptr, nullptr, nullptr, nullptr};
 int EncoderHAL::instanceCount = 0;
 
-/***************************************************************
- * Constructor
- ***************************************************************/
+// ---------------- constructor ----------------
 EncoderHAL::EncoderHAL(uint pinA, uint pinB)
-    : _pinA(pinA), _pinB(pinB),
-      _ticks(0), _direction(EncoderDirection::UNKNOWN),
-      _lastA(false), _lastB(false)
+    : _pinA(pinA),
+      _pinB(pinB),
+      _ticks(0),
+      _direction(EncoderDirection::UNKNOWN),
+      _lastState(0)
 {
-    // Register this encoder instance for ISR handling
-    if (instanceCount < 2)
-    instances[instanceCount++] = this;
+    if (instanceCount < 4)
+        instances[instanceCount++] = this;
 }
 
-/***************************************************************
- * Method: encoder_init
- ***************************************************************/
-void EncoderHAL::encoder_init() {
+// ---------------- init ----------------
+void EncoderHAL::encoderInit() {
     gpio_init(_pinA);
     gpio_init(_pinB);
 
@@ -32,15 +27,14 @@ void EncoderHAL::encoder_init() {
     gpio_pull_up(_pinA);
     gpio_pull_up(_pinB);
 
-    _lastA = gpio_get(_pinA);
-    _lastB = gpio_get(_pinB);
+    // encode initial state
+    _lastState = (gpio_get(_pinA) << 1) | gpio_get(_pinB);
 
-    // Enable interrupts on both edges
     gpio_set_irq_enabled_with_callback(
         _pinA,
         GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL,
         true,
-        &EncoderHAL::encoder_gpioCallback
+        &EncoderHAL::encoderGpioCallback
     );
 
     gpio_set_irq_enabled(
@@ -50,51 +44,61 @@ void EncoderHAL::encoder_init() {
     );
 }
 
-/***************************************************************
- * Static ISR Callback
- ****************************************************************/
-void EncoderHAL::encoder_gpioCallback(uint gpio, uint32_t events) {
-    // Dispatch interrupt to the correct encoder instance
+// ---------------- ISR ----------------
+void EncoderHAL::encoderGpioCallback(uint gpio, uint32_t events) {
     for (int i = 0; i < instanceCount; i++) {
         if (gpio == instances[i]->_pinA || gpio == instances[i]->_pinB) {
             instances[i]->handleEncoder();
+            return;
         }
     }
 }
 
-/***************************************************************
- * Method: handleEncoder
- ***************************************************************/
+// ---------------- CORE FIX ----------------
 void EncoderHAL::handleEncoder() {
-    bool a = gpio_get(_pinA);
-    bool b = gpio_get(_pinB);
 
-    if (a != _lastA || b != _lastB) {
-        if (_lastA == _lastB) {
-            if (a != b) { _ticks++; _direction = EncoderDirection::FORWARD;  }
-            else        { _ticks--; _direction = EncoderDirection::BACKWARD; }
-        } else {
-            if (a == b) { _ticks++; _direction = EncoderDirection::FORWARD;  }
-            else        { _ticks--; _direction = EncoderDirection::BACKWARD; }
-        }
+    uint8_t state = (gpio_get(_pinA) << 1) | gpio_get(_pinB);
+
+    uint8_t transition = (_lastState << 2) | state;
+
+    switch (transition) {
+
+        // FORWARD
+        case 0b0001:
+        case 0b0111:
+        case 0b1110:
+        case 0b1000:
+            _ticks++;
+            _direction = EncoderDirection::FORWARD;
+            break;
+
+        // BACKWARD
+        case 0b0010:
+        case 0b0100:
+        case 0b1101:
+        case 0b1011:
+            _ticks--;
+            _direction = EncoderDirection::BACKWARD;
+            break;
+
+        default:
+            // ignore noise / invalid transitions
+            break;
     }
 
-    _lastA = a;
-    _lastB = b;
+    _lastState = state;
 }
 
-/***************************************************************
- * Getter Methods
- ***************************************************************/
-int32_t EncoderHAL::encoder_getTicks() const { 
+// ---------------- getters ----------------
+int32_t EncoderHAL::encoderGetTicks() const {
     return _ticks;
 }
 
-void EncoderHAL::encoder_clear() {
+void EncoderHAL::encoderClear() {
     _ticks = 0;
     _direction = EncoderDirection::UNKNOWN;
 }
 
-EncoderDirection EncoderHAL::encoder_getDirection() const {
+EncoderDirection EncoderHAL::encoderGetDirection() const {
     return _direction;
 }

@@ -8,7 +8,10 @@ MotorHal::MotorHal(uint in1, uint in2, uint en)
 // Hardware init
 void MotorHal::motorInit() {
 
-    if (_initialized) return;
+    if (_initialized) 
+    {
+        return;
+    }
 
     // Direction pins
     gpio_init(_in1);
@@ -32,17 +35,21 @@ void MotorHal::motorInit() {
 // Set motor direction and speed (0.0 -> 1.0)
 void MotorHal::setMotorOutput(MotorState state, float duty) {
 
-    if (!_initialized) return;
+    if (!_initialized) 
+    {
+        return;
+    }
+    
     // Limit duty
     if (duty < 0) duty = 0.0f;
     if (duty > 1) duty = 1.0f;
 
     switch (state) {
-        case MotorState::FORWARD:    // FORWARD
+        case MotorState::FORWARD:    // FORWARD(CW)
             gpio_put(_in1, 1);
             gpio_put(_in2, 0);
             break;
-        case MotorState::BACKWARD:   // BACKWARD
+        case MotorState::BACKWARD:   // BACKWARD(CCW)
             gpio_put(_in1, 0);
             gpio_put(_in2, 1);
             break;

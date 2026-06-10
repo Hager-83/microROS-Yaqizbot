@@ -18,15 +18,15 @@
 #define MPU9250_HAL_HPP
 
 /* ************************************** Include Part **************************************** */
-
-/* MPU9250_Registers.hpp: Register definitions*/
-#include "MPU9250_Registers.hpp"
 /* cstdint: Standard integer types.*/
 #include <cstdint>
+#include <cstddef>
 /* pico/stdlib.h: Pico SDK standard library */
 #include "pico/stdlib.h"
 /* hardware/i2c.h: Pico SDK I2C hardware interface.*/
 #include "hardware/i2c.h"
+/* MPU9250_Registers.hpp: Register definitions*/
+#include "MPU9250_Registers.hpp"
 /* ******************************************************************************************** */
 
 /**
@@ -41,9 +41,9 @@
 
 class MPU9250_HAL 
 {
-    public:
+public:
     /**
-     * @brie:Constructor for MPU9250_HAL.
+     * @brief:Constructor for MPU9250_HAL.
      * 
      * Initializes the class with the I2C instance and device address.
      * 
@@ -62,36 +62,13 @@ class MPU9250_HAL
      * @param scl_pin :GPIO pin for SCL (clock line).
      * @param baudrate_hz :I2C baudrate in Hz (e.g., 400000 for 400 kHz).
      * @return :true if initialization succeeded, false otherwise.
+     * 
+     * 
     */
     bool begin(uint sda_pin, uint scl_pin, uint32_t baudrate_hz);
 
-    /**
-     * @brief :Test connection to the MPU9250.
-     * 
-     * Reads the WHO_AM_I register (0x75) and verifies the device ID (expected: 0x71, 0x72, 0x73).
-     * 
-     * @return :true if connection is valid, false otherwise.
-     */
-    bool testConnection(); // edit is connected 
+    bool init(uint sda_pin, uint scl_pin, uint32_t baudrate_hz);
 
-    /** <-----------
-     * @brief I:nitialize and configure the MPU9250 sensor.
-     * 
-     * Performs a device reset, sets clock source, and enables basic sensor operation
-     * (e.g., via PWR_MGMT_1, SMPLRT_DIV, CONFIG, etc.).
-     * 
-     * @return t:rue if initialization succeeded, false otherwise.
-     */
-    bool initMPU9250(); // edit
-
-    /**
-     * @brief :Initialize the AK8963 magnetometer.
-     * 
-     * Configures the magnetometer via I2C Master mode (e.g., using I2C_SLV4_ADDR).
-     * 
-     * @return t:rue if initialization succeeded, false otherwise.
-     */
-    bool initAK8963(); // but in private , or configuration file or configuration.yaml
 
     /**
      * @brief :Read raw accelerometer data.
@@ -146,6 +123,17 @@ class MPU9250_HAL
                     int16_t &gx, int16_t &gy, int16_t &gz,
                     int16_t &temp);
 
+
+    /*
+    /**
+     * @brief :Initialize the AK8963 magnetometer.
+     * 
+     * Configures the magnetometer via I2C Master mode (e.g., using I2C_SLV4_ADDR).
+     * 
+     * @return :true if initialization succeeded, false otherwise.
+     *
+    bool AK8963Init(); // but in private , or configuration file or configuration.yaml
+    
     /**
      * @brief :Read raw magnetometer data from AK8963.
      * 
@@ -155,15 +143,35 @@ class MPU9250_HAL
      * @param my :Reference to store Y-axis magnetic field (raw).
      * @param mz :Reference to store Z-axis magnetic field (raw).
      * @return :true if read succeeded, false otherwise.
-     */              
+     * 
+     *            
     bool readMagRaw(int16_t &mx, int16_t &my, int16_t &mz);
+    */
 
-    private:
-    i2c_inst_t* i2c_ = NULL; // EDIT TO smart pointer
-    uint8_t address_;
-    bool i2c_configured_;
 
-    /* ******************************** Helper Function ************************************ */
+    /* ******************************** Internal driver functions ************************************ */
+private:
+
+    /**
+     * @brief :Test connection to the MPU9250.
+     * 
+     * Reads the WHO_AM_I register (0x75) and verifies the device ID (expected: 0x71, 0x72, 0x73).
+     * 
+     * @return :true if connection is valid, false otherwise.
+     */
+    bool IsConnected(); // edit is connected 
+
+    /** 
+     * @brief :Initialize and configure the MPU9250 sensor.
+     * 
+     * Performs a device reset, sets clock source, and enables basic sensor operation
+     * (e.g., via PWR_MGMT_1, SMPLRT_DIV, CONFIG, etc.).
+     * 
+     * @return t:rue if initialization succeeded, false otherwise.
+     */
+    bool MPU9250Init(); 
+
+
     /**
      * @brief :Write a single byte to a register.
      * 
@@ -186,6 +194,11 @@ class MPU9250_HAL
      * @return :true if read succeeded, false otherwise.
     * */
     bool readBytes(uint8_t reg, uint8_t* buffer, size_t len); // edit c++
+
+    i2c_inst_t* i2c_ = NULL;   // EDIT TO smart pointer
+    uint8_t address_;
+    bool i2c_configured_;
 };
 
 #endif // MPU9250_HAL_HPP
+

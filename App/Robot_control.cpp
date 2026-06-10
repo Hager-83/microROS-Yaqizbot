@@ -1,244 +1,346 @@
 #include <stdio.h>
-#include <math.h>
+#include <math.h>  // if needed in future calculations
 
-/* micro-ROS */
 #include <rcl/rcl.h>
 #include <rclc/rclc.h>
 #include <rclc/executor.h>
+
+#include <rcl/error_handling.h>
 #include <rmw_microros/rmw_microros.h>
 
-/* ROS msgs */
 #include <geometry_msgs/msg/twist.h>
-#include <std_msgs/msg/float32.h>
-#include <sensor_msgs/msg/imu.h>
+#include "sensor_msgs/msg/imu.h"
+
+#include <sensor_msgs/msg/joint_state.h>
 
 /* Pico */
 #include "pico/stdlib.h"
-#include "../pico_uart_transports.h"
-
-/* HAL + Services */
-#include "encoder_hal.hpp"
-#include "encoder_service.hpp"
-#include "motor_hal.hpp"
-#include "motor_service.hpp"
-#include "PID.hpp"
+extern "C" {
+    #include "pico_uart_transports.h"
+}
+#include "Robot_control.hpp"
 #include "MPU9250_Service.hpp"
 
-/* Robot parameters */
-#define WHEEL_RADIUS_CM   3.5f
-#define WHEEL_BASE_CM     25.0f
-#define CONTROL_DT        0.01f   // 100 Hz
+#include "encoder_config.hpp"                  
+#include "encoder_hal.hpp"
+#include "encoder_service.hpp"
 
-/* micro-ROS objects */
+#include "motor_config.hpp"
+#include "motor_hal.hpp"
+#include "motor_service.hpp"  
+
+
+// micro-ROS objects 
 rcl_subscription_t cmd_vel_sub;
-
-rcl_publisher_t left_rpm_pub;
-rcl_publisher_t right_rpm_pub;
-rcl_publisher_t imu_pub;
-
 geometry_msgs__msg__Twist cmd_vel_msg;
-std_msgs__msg__Float32 left_rpm_msg;
-std_msgs__msg__Float32 right_rpm_msg;
-sensor_msgs__msg__Imu imu_msg;
 
-/* Hardware */
-EncoderHAL left_encoder(ENCODER1_PIN_A, ENCODER1_PIN_B);
-EncoderHAL right_encoder(ENCODER2_PIN_A, ENCODER2_PIN_B);
+// micro-ROS objects 
+/* Publishers */
+rcl_publisher_t imu_pub;
+sensor_msgs__msg__Imu imu_msg; 
 
-EncoderService left_encoder_service(left_encoder);
-EncoderService right_encoder_service(right_encoder);
+rcl_publisher_t joint_state_pub;
+sensor_msgs__msg__JointState joint_state_msg;
 
-MotorHal left_motor(MOTOR_A_IN1, MOTOR_A_IN2, MOTOR_A_EN);
-MotorHal right_motor(MOTOR_B_IN1, MOTOR_B_IN2, MOTOR_B_EN);
+// Static arrays 
+static double js_positions[4];
+static double js_velocities[4];
+static double js_effort[4] = {0.0, 0.0, 0.0, 0.0};
 
-MotorService left_motor_service(left_motor);
-MotorService right_motor_service(right_motor);
+static const char* joint_names[4] = {
+    "fl_wheel_joint",
+    "rl_wheel_joint",
+    "fr_wheel_joint",
+    "rr_wheel_joint"
+};
 
-/* PID */
-MotorPID::PIDINPUT left_pid_cfg  = {1.2f, 0.1f, 0.01f, CONTROL_DT, 0.0f};
-MotorPID::PIDINPUT right_pid_cfg = {1.2f, 0.1f, 0.01f, CONTROL_DT, 0.0f};
+IMUService* imu_ptr = nullptr;
 
-MotorPID left_pid(&left_pid_cfg);
-MotorPID right_pid(&right_pid_cfg);
-
-/* IMU */
 MPU9250_HAL imu_hal(i2c_default, MPU6500_DEFAULT_ADDRESS);
-IMUService imu_service(imu_hal);
+IMUService  imu_service(imu_hal);
 
-/* cmd_vel callback */
-void cmd_vel_callback(const void * msg)
-{
-    const geometry_msgs__msg__Twist * twist =
-        (const geometry_msgs__msg__Twist *)msg;
+// Encoder objects
+EncoderHAL enc_FL(ENCODER1_PIN_A, ENCODER1_PIN_B);   // front-left
+EncoderHAL enc_RL(ENCODER2_PIN_A, ENCODER2_PIN_B);   // rear-left
+EncoderHAL enc_FR(ENCODER3_PIN_A, ENCODER3_PIN_B);   // front-right
+EncoderHAL enc_RR(ENCODER4_PIN_A, ENCODER4_PIN_B);   // rear-right
 
-    float linear  = twist->linear.x * 100.0f;   // m/s → cm/s
-    float angular = twist->angular.z;           // rad/s
 
-    float left_speed  = linear - (angular * WHEEL_BASE_CM / 2.0f);
-    float right_speed = linear + (angular * WHEEL_BASE_CM / 2.0f);
+EncoderService svc_enc_FL(enc_FL);
+EncoderService svc_enc_RL(enc_RL);
+EncoderService svc_enc_FR(enc_FR);
+EncoderService svc_enc_RR(enc_RR);
 
-    float left_rpm  = (left_speed  / (2.0f * M_PI * WHEEL_RADIUS_CM)) * 60.0f;
-    float right_rpm = (right_speed / (2.0f * M_PI * WHEEL_RADIUS_CM)) * 60.0f;
 
-    left_pid.SetSpeedRPM(fabs(left_rpm),  left_rpm  >= 0);
-    right_pid.SetSpeedRPM(fabs(right_rpm), right_rpm >= 0);
+// Motor objects 
+MotorHal motor_FL(MOTOR_FL_IN1, MOTOR_FL_IN2, MOTOR_FL_EN);
+MotorHal motor_RL(MOTOR_RL_IN1, MOTOR_RL_IN2, MOTOR_RL_EN);
+MotorHal motor_FR(MOTOR_FR_IN1, MOTOR_FR_IN2, MOTOR_FR_EN);
+MotorHal motor_RR(MOTOR_RR_IN1, MOTOR_RR_IN2, MOTOR_RR_EN);
 
-    printf("CMD_VEL target RPM updated. \n");
+MotorService svc_motor_FL(motor_FL);
+MotorService svc_motor_RL(motor_RL);
+MotorService svc_motor_FR(motor_FR);
+MotorService svc_motor_RR(motor_RR);
+
+
+rcl_allocator_t allocator;
+rclc_support_t support;
+rcl_node_t node;
+rcl_timer_t control_timer, imu_timer;
+rclc_executor_t executor;
+
+// Kinematics parameters (based on robot) 
+const float WHEEL_BASE_M  = 0.28f;    // distance between left and right wheels in metres (measure and confirm)
+const float MAX_SPEED_M_S = 1.0f;     // Maximum allowed speed in m/s
+
+// cmd_vel callback: converts Twist to target speed for each motor
+void cmd_vel_callback(const void *msgin) {
+    const geometry_msgs__msg__Twist *msg = (const geometry_msgs__msg__Twist *)msgin;
+
+    float linear  = msg->linear.x;   // Forward/backward speed in m/s
+    float angular = msg->angular.z;  // Rotation speed in rad/s
+
+    // Differential drive kinematics
+    float left_target  = linear - (angular * WHEEL_BASE_M / 2.0f);
+    float right_target = linear + (angular * WHEEL_BASE_M / 2.0f);
+
+    // Normalize to -1.0 → +1.0 (relative to max speed)
+    left_target  /= MAX_SPEED_M_S;
+    right_target /= MAX_SPEED_M_S;
+
+    // Send target speed to each motor
+    
+    svc_motor_FL.setTargetSpeed(left_target);
+    svc_motor_RL.setTargetSpeed(left_target);
+
+    // right side motor are physically reversed 
+    svc_motor_FR.setTargetSpeed(-right_target); //<----------------
+    svc_motor_RR.setTargetSpeed(-right_target);
+    
+
+    // Debug print
+    //printf("cmd_vel: lin=%.2f ang=%.2f → L=%.2f R=%.2f\n",linear, angular, left_target, right_target);
 }
 
-/* Control loop (100 Hz) */
-void control_timer_callback(rcl_timer_t * timer, int64_t)
+// ────────────────────────────────────────────────
+// Timer callback - reads values and publishes them
+// ────────────────────────────────────────────────
+void control_timer_callback(rcl_timer_t * timer, int64_t last_call_time)
 {
-    if (!timer) return;
+    (void) last_call_time;
+    if (timer == NULL) return;
 
-    float left_rpm  = left_encoder_service.encoder_getRPM();
-    float right_rpm = right_encoder_service.encoder_getRPM();
+    static const double WHEEL_RADIUS_M = WHEEL_RADIUS_CM / 100.0;
 
-    float left_throttle  = left_pid.UpdateThrottle(left_rpm);
-    float right_throttle = right_pid.UpdateThrottle(right_rpm);
+    // Positions (rad)
+    js_positions[0] = svc_enc_FL.encoderGetPositionRad();
+    js_positions[1] = svc_enc_RL.encoderGetPositionRad();
+    js_positions[2] = svc_enc_FR.encoderGetPositionRad();
+    js_positions[3] = svc_enc_RR.encoderGetPositionRad();
 
-    left_motor_service.setTargetSpeed(left_throttle);
-    right_motor_service.setTargetSpeed(right_throttle);
+    // Velocities: cm/s → rad/s
+    js_velocities[0] = (svc_enc_FL.encoderGetSpeedCmS() / 100.0f) / WHEEL_RADIUS_M;
+    js_velocities[1] = (svc_enc_RL.encoderGetSpeedCmS() / 100.0f) / WHEEL_RADIUS_M;
+    js_velocities[2] = (svc_enc_FR.encoderGetSpeedCmS() / 100.0f) / WHEEL_RADIUS_M;
+    js_velocities[3] = (svc_enc_RR.encoderGetSpeedCmS() / 100.0f) / WHEEL_RADIUS_M;
 
-    left_rpm_msg.data  = left_rpm;
-    right_rpm_msg.data = right_rpm;
+    // Timestamp
+    // In init_ros(), after rmw_uros_ping_agent succeeds:
 
-    rcl_ret_t ret1 = rcl_publish(&left_rpm_pub, &left_rpm_msg, NULL);
-    rcl_ret_t ret2 = rcl_publish(&right_rpm_pub, &right_rpm_msg, NULL);
-    if ((ret1 || ret2) != RCL_RET_OK) 
-    {
-        printf("Failed to publish Wheel RPM message\n");
-    }
+    // Then in each callback:
+    int64_t now_ms = rmw_uros_epoch_millis();
+    joint_state_msg.header.stamp.sec     = (int32_t)(now_ms / 1000);
+    joint_state_msg.header.stamp.nanosec = (uint32_t)((now_ms % 1000) * 1000000ULL);
+
+    joint_state_msg.position.data  = js_positions;
+    joint_state_msg.velocity.data  = js_velocities;
+    joint_state_msg.effort.data    = js_effort;
+    joint_state_msg.position.size  = 4;
+    joint_state_msg.velocity.size  = 4;
+    joint_state_msg.effort.size    = 4;
+
+    rcl_ret_t ret = rcl_publish(&joint_state_pub, &joint_state_msg, NULL);
+    if (ret != RCL_RET_OK)
+        printf("Failed to publish JointState\n");
 }
-
-/* IMU timer (50 Hz) */
-void imu_timer_callback(rcl_timer_t *, int64_t)
+ 
+void imu_timer_callback(rcl_timer_t *timer, int64_t last_call_time)
 {
-    IMUData data = imu_service.getAll();
+    IMUData data = imu_ptr->getAll();
+    
 
-    imu_msg.linear_acceleration.x = data.accel.x_g;
-    imu_msg.linear_acceleration.y = data.accel.y_g;
-    imu_msg.linear_acceleration.z = data.accel.z_g;
+    imu_msg.linear_acceleration.x = data.accel.x_g * 9.80665f;
+    imu_msg.linear_acceleration.y = data.accel.y_g * 9.80665f;
+    imu_msg.linear_acceleration.z = data.accel.z_g * 9.80665f;
 
-    imu_msg.angular_velocity.x = data.gyro.x_dps;
-    imu_msg.angular_velocity.y = data.gyro.y_dps;
-    imu_msg.angular_velocity.z = data.gyro.z_dps;
+    imu_msg.angular_velocity.x = data.gyro.x_dps * (M_PI / 180.0f);
+    imu_msg.angular_velocity.y = data.gyro.y_dps * (M_PI / 180.0f);
+    imu_msg.angular_velocity.z = data.gyro.z_dps * (M_PI / 180.0f);
+
+    imu_msg.header.frame_id.data =
+    (char*)"imu_link";
+    
+    imu_msg.header.frame_id.size =
+    strlen("imu_link");
+    
+    imu_msg.header.frame_id.capacity =
+    strlen("imu_link") + 1;
+
+    // Timestamp
+    int64_t now_ms = rmw_uros_epoch_millis();
+    imu_msg.header.stamp.sec     = (int32_t)(now_ms / 1000);
+    imu_msg.header.stamp.nanosec = (uint32_t)((now_ms % 1000) * 1000000ULL);
+
 
     rcl_ret_t ret = rcl_publish(&imu_pub, &imu_msg, NULL);
     if (ret != RCL_RET_OK) 
     {
         printf("Failed to publish IMU message\n");
     }
-    rcl_publish(&imu_pub, &imu_msg, NULL);
-}
 
-int main()
+}
+void RobotSystem::init()
 {
     stdio_init_all();
-    sleep_ms(1500);
+    sleep_ms(2000);
+    printf("Robot System Init\n");
 
-    printf("System started\n");
+    init_transport();
+    init_hardware();
+    init_ros();
+}
 
+void RobotSystem::init_transport()
+{
     rmw_uros_set_custom_transport(
-        true, NULL,
+        true,
+        NULL,
         pico_serial_transport_open,
         pico_serial_transport_close,
         pico_serial_transport_write,
         pico_serial_transport_read
     );
-
-    /* Init hardware */
-    left_encoder.encoder_init();
-    right_encoder.encoder_init();
-    left_encoder_service.encoder_start();
-    right_encoder_service.encoder_start();
-
-    while (!imu_hal.begin(PICO_DEFAULT_I2C_SDA_PIN,PICO_DEFAULT_I2C_SCL_PIN, 400000)) 
+}
+void RobotSystem::init_hardware()
+{
+    // IMU  
+    while (!imu_service.IMUInit(PICO_DEFAULT_I2C_SDA_PIN,
+                               PICO_DEFAULT_I2C_SCL_PIN,
+                               400000))
     {
-        printf("IMU HAL begin failed, retrying...\n");
-        sleep_ms(500);
-    }
-    while (!imu_service.begin()) 
-    {
-        printf("IMU Service begin failed, retrying...\n");
+        printf("IMU retry...\n");
         sleep_ms(500);
     }
 
-    /* micro-ROS */
-    rcl_allocator_t allocator = rcl_get_default_allocator();
-    rclc_support_t support;
-    rcl_node_t node;
-    rclc_executor_t executor;
-    rcl_timer_t control_timer, imu_timer;
+    imu_ptr = &imu_service;
 
-    // Wait for agent successful ping for 2 minutes.
-    const int timeout_ms = 1000; 
-    const uint8_t attempts = 120;
+    imu_service.calibrateGyro();
 
-    rcl_ret_t ret = rmw_uros_ping_agent(timeout_ms, attempts);
-    if (ret != RCL_RET_OK)
+    // Encoders  
+    svc_enc_FL.encoderInit();
+    svc_enc_RL.encoderInit();
+    svc_enc_FR.encoderInit();
+    svc_enc_RR.encoderInit();
+
+    // Motors
+    svc_motor_FL.motorInit();
+    svc_motor_RL.motorInit();
+    svc_motor_FR.motorInit();
+    svc_motor_RR.motorInit();
+    
+    svc_enc_FL.encoderStart();
+    svc_enc_RL.encoderStart();
+    svc_enc_FR.encoderStart();
+    svc_enc_RR.encoderStart();
+}
+ 
+void RobotSystem::init_ros()
+{
+    allocator = rcl_get_default_allocator();
+
+    if (rmw_uros_ping_agent(1000, 120) != RCL_RET_OK)
     {
-        // Unreachable agent, exiting program.
-        printf("Cannot reach micro-ROS agent --> exiting\n");
-        return ret;
+        printf("No micro-ROS agent\n");
+        return;
     }
 
-    // -------------------- micro-ROS support & node --------------------
     rclc_support_init(&support, 0, NULL, &allocator);
     rclc_node_init_default(&node, "robot_control_node", "", &support);
 
-    /* Topics */
+
+    // Subscriber
     rclc_subscription_init_default(
-        &cmd_vel_sub, &node,
+        &cmd_vel_sub,
+        &node,
         ROSIDL_GET_MSG_TYPE_SUPPORT(geometry_msgs, msg, Twist),
-        "/cmd/vel"
+        "cmd_vel"
     );
 
-    rclc_publisher_init_default(
-        &left_rpm_pub, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-        "/wheel/left/rpm"
-    );
+    // Publishers
+    rclc_publisher_init_default(&joint_state_pub, &node,
+        ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, JointState), "joint_states");
 
-    rclc_publisher_init_default(
-        &right_rpm_pub, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(std_msgs, msg, Float32),
-        "/wheel/right/rpm"
-    );
+    // Add this in init_ros(), alongside joint_state_pub init:
+    rclc_publisher_init_default(&imu_pub, &node,
+    ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu), "imu/data");
 
-    rclc_publisher_init_default(
-        &imu_pub, &node,
-        ROSIDL_GET_MSG_TYPE_SUPPORT(sensor_msgs, msg, Imu),
-        "/imu/data"
-    );
+    sensor_msgs__msg__JointState__init(&joint_state_msg);
 
-    rclc_timer_init_default(
-        &control_timer, &support,
-        RCL_MS_TO_NS(10), control_timer_callback
-    );
+    joint_state_msg.header.frame_id.data     = (char*)"base_link";
+    joint_state_msg.header.frame_id.size     = strlen("base_link");
+    joint_state_msg.header.frame_id.capacity = strlen("base_link") + 1;
 
-    rclc_timer_init_default(
-        &imu_timer, &support,
-        RCL_MS_TO_NS(20), imu_timer_callback
-    );
-    // -------------------- Timer setup --------------------
+    joint_state_msg.name.data = (rosidl_runtime_c__String*)
+    allocator.allocate(4 * sizeof(rosidl_runtime_c__String), allocator.state);
+    joint_state_msg.name.size     = 4;
+    joint_state_msg.name.capacity = 4;
 
+    for (int i = 0; i < 4; i++) {
+        joint_state_msg.name.data[i].data     = (char*)joint_names[i];
+        joint_state_msg.name.data[i].size     = strlen(joint_names[i]);
+        joint_state_msg.name.data[i].capacity = strlen(joint_names[i]) + 1;
+    }
+
+    joint_state_msg.position.data     = js_positions;
+    joint_state_msg.position.size     = 4;
+    joint_state_msg.position.capacity = 4;
+
+    joint_state_msg.velocity.data     = js_velocities;
+    joint_state_msg.velocity.size     = 4;
+    joint_state_msg.velocity.capacity = 4;
+
+    joint_state_msg.effort.data     = js_effort;
+    joint_state_msg.effort.size     = 4;
+    joint_state_msg.effort.capacity = 4;
+    
+
+    rmw_uros_sync_session(1000);
+
+    // Timers
+    rclc_timer_init_default2(&control_timer, &support,
+        RCL_MS_TO_NS(50), control_timer_callback, true);
+
+    rclc_timer_init_default2(&imu_timer, &support,
+        RCL_MS_TO_NS(10), imu_timer_callback, true);
+
+    // Executor
     rclc_executor_init(&executor, &support.context, 3, &allocator);
-    rclc_executor_add_subscription( &executor, &cmd_vel_sub, &cmd_vel_msg,&cmd_vel_callback, ON_NEW_DATA);
+
+    rclc_executor_add_subscription(&executor,
+        &cmd_vel_sub, &cmd_vel_msg,
+        &cmd_vel_callback, ON_NEW_DATA);
+
     rclc_executor_add_timer(&executor, &control_timer);
     rclc_executor_add_timer(&executor, &imu_timer);
+}
 
-    printf("Robot node ready - waiting for /cmd_vel. \n");
-
+void RobotSystem::spin()
+{
     while (true)
     {
-        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(10));
-
+        rclc_executor_spin_some(&executor, RCL_MS_TO_NS(5));
     }
-    // Cleanup (rarely reached)
-    rclc_executor_fini(&executor);
-    rcl_node_fini(&node);
-    rclc_support_fini(&support);
-
-    return 0;
 }
+
+

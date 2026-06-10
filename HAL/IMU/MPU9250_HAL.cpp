@@ -2,8 +2,9 @@
 #include "MPU9250_HAL.hpp"
 
 
+
 MPU9250_HAL::MPU9250_HAL(i2c_inst_t* i2c, uint8_t address)
-: i2c_(i2c), address_(address), i2c_configured_(false){ }
+: i2c_(i2c), address_(address), i2c_configured_(false){}
 
 bool MPU9250_HAL::begin(uint sda_pin, uint scl_pin, uint32_t baudrate_hz) 
 {
@@ -16,104 +17,33 @@ bool MPU9250_HAL::begin(uint sda_pin, uint scl_pin, uint32_t baudrate_hz)
     i2c_configured_ = true;
 
     sleep_ms(10);
-    return testConnection();
+    return i2c_configured_;
 }
 
-bool MPU9250_HAL::testConnection() // edit private function
+bool MPU9250_HAL::init(uint sda_pin, uint scl_pin, uint32_t baudrate_hz)
 {
-    if(!i2c_configured_)
-    {
-        return false;
-    }
-    uint8_t who;
-    readBytes(WHO_AM_I,&who,1);
-    /* WHO_AM_I for MPU6500 typically 0x70 or 0x71 or 0x73 etc depending on part; accept non-zero */
-    if((who == 0X70) || (who == 0X71) || (who == 0X73)) // edit to the first 
-    {
-        return (true);
-    }
-    else
-    {
-        return false;
-    }
-       
-}
-
-bool MPU9250_HAL::initMPU9250() 
-{
-    if(!i2c_configured_)
+    // I2C setup 
+    if (!begin(sda_pin, scl_pin, baudrate_hz))
     {
         return false;
     }
 
-    /* Reset device : write 1 on bit 7 */
-    if(!writeByte(PWR_MGMT_1, 0x80)) 
+    // Check sensor existence 
+    if (!IsConnected())
     {
         return false;
     }
-    sleep_ms(100);
 
-    /* Wake up and set clock source to PLL with X axis gyroscope reference: write 1 on bit 0 */
-    if(!writeByte(PWR_MGMT_1, 0x01))
+    // Configure MPU9250 
+    if (!MPU9250Init())
     {
         return false;
-    }
-    sleep_ms(50);
-
-
-    /* CONFIG: disable FSYNC, set DLPF (0) , enable LPS */
-    if(!writeByte(CONFIG, 0x03)) 
-    {
-        return false; // set some DLPF
     }
     
-    /* Set sample rate divider (SMPLRT_DIV) */
-    if(!writeByte(SMPLRT_DIV, 0x04))
-    {
-        return false; // sample = gyro_rate/(1+4)
-    } 
-
-    /* ACCEL_CONFIG2: set DLPF for accel */
-    if(!writeByte(ACCEL_CONFIG2, 0x03))
-    {
-        return false;
-    }
-
-
     return true;
 }
 
-bool MPU9250_HAL::readBytes(uint8_t reg, uint8_t* buffer, size_t len)
-{
-    // edit  will remove it 
-    if(!i2c_configured_) 
-    {
-        return false;
-    }
-
-    int ret = i2c_write_blocking(i2c_, address_, &reg, 1, true); // keep master control (no stop) // edit return std_optional
-    if (ret < 0)
-    {
-        return false;
-    }
-    int r = i2c_read_blocking(i2c_, address_, buffer, len, false);
-
-    return (r == (int)len);
-}
-
-bool MPU9250_HAL::writeByte(uint8_t reg, uint8_t value) 
-{
-    if(!i2c_configured_)
-    {
-        return false;
-    }
-
-    uint8_t buf[2] = {reg, value};
-    int ret = i2c_write_blocking(i2c_, address_, buf, 2, false); // send with stop
-
-    return (ret == 2);
-}
-
+/* ========================= Sensor Read APIs ========================= */
 bool MPU9250_HAL::readAccelRaw(int16_t &ax, int16_t &ay, int16_t &az) 
 {
     uint8_t buf[6];
@@ -161,7 +91,7 @@ bool MPU9250_HAL::readAllRaw(int16_t &ax, int16_t &ay, int16_t &az,
                              int16_t &gx, int16_t &gy, int16_t &gz,
                              int16_t &temp)
 {
-    // read 14 bytes ACCEL..TEMP..GYRO
+    // Read 16 bit --> ACCEL(6) + TEMP(2) + GYRO(6)
     uint8_t buf[14];
     if(!readBytes(ACCEL_XOUT_H, buf, 14)) 
     {
@@ -183,7 +113,9 @@ bool MPU9250_HAL::readAllRaw(int16_t &ax, int16_t &ay, int16_t &az,
 }
 
 
-bool MPU9250_HAL::initAK8963() 
+
+/*
+bool MPU9250_HAL::AK8963Init() 
 {
     if (!writeByte(INT_PIN_CFG, 0x02)) // BYPASS_EN
     {
@@ -219,3 +151,91 @@ bool MPU9250_HAL::readMagRaw(int16_t &mx, int16_t &my, int16_t &mz)
 
     return true;
 }
+*/
+
+/* ========================= Private  ========================= */
+
+bool MPU9250_HAL::IsConnected() // edit private function
+{
+
+    uint8_t who = 0;
+
+    if (!readBytes(WHO_AM_I, &who, 1))
+    {
+        return false;
+    }
+    
+    /* WHO_AM_I for MPU6500 typically 0x70 or 0x71 or 0x73 etc depending on part; accept non-zero */
+    return ((who == 0X70) || (who == 0X71) || (who == 0X73));
+}
+
+bool MPU9250_HAL::MPU9250Init() 
+{
+    if(!i2c_configured_)
+    {
+        return false;
+    }
+
+    /* Reset device : write 1 on bit 7 */
+    if(!writeByte(PWR_MGMT_1, 0x80)) 
+    {
+        return false;
+    }
+    sleep_ms(100);
+
+    /* Wake up and set clock source to PLL with X axis gyroscope reference: write 1 on bit 0 */
+    if(!writeByte(PWR_MGMT_1, 0x01))
+    {
+        return false;
+    }
+    sleep_ms(50);
+
+
+    /* CONFIG: disable FSYNC, set DLPF (0) , enable LPS */
+    if(!writeByte(CONFIG, 0x03)) 
+    {
+        return false; // set some DLPF
+    }
+    
+    /* Set sample rate divider (SMPLRT_DIV) */
+    if(!writeByte(SMPLRT_DIV, 0x04))
+    {
+        return false; // sample = gyro_rate/(1+4)
+    } 
+
+    /* ACCEL_CONFIG2: set DLPF for accel */
+    if(!writeByte(ACCEL_CONFIG2, 0x03))
+    {
+        return false;
+    }
+
+    return true;
+}
+
+bool MPU9250_HAL::writeByte(uint8_t reg, uint8_t value) 
+{
+    if(!i2c_configured_)
+    {
+        return false;
+    }
+
+    uint8_t buf[2] = {reg, value};
+    int ret = i2c_write_blocking(i2c_, address_, buf, 2, false); // send with stop
+
+    return (ret == 2);
+}
+
+bool MPU9250_HAL::readBytes(uint8_t reg, uint8_t* buffer, size_t len)
+{
+
+    int ret = i2c_write_blocking(i2c_, address_, &reg, 1, true); // keep master control (no stop) // edit return std_optional
+    if (ret < 0)
+    {
+        return false;
+    }
+    int r = i2c_read_blocking(i2c_, address_, buffer, len, false);
+
+    return (r == (int)len);
+}
+
+
